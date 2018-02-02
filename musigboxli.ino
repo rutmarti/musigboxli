@@ -242,9 +242,11 @@ void loop()
             switch (buttonIx)
             {
             case backButtonIx:
+                // go to previous song
                 idx = (idx > 0) ? idx - 1 : 0;
                 break;
             case fwdButtonIx:
+                // go to next song
                 idx += 1;
                 break;
             default:
