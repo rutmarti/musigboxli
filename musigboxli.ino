@@ -207,8 +207,8 @@ void loop()
     // put your main code here, to run repeatedly:
 
     // index of current file to be played
-    static int idx = 0;
-    static int alb = 3;
+    static int idx = firstSongIx;
+    static int alb = firstAlbIx;
 
     uint32_t callBackVal;
     char fileName[10];
