@@ -12,10 +12,13 @@
 //#define DEBUG_ENABLED //!< Enable debug output
 
 #ifdef DEBUG_ENABLED
-#define DEBUG_PRINT(fmt, args...)  Serial.printf(fmt, ## args)
+#define DEBUG_PRINT(fmt, args...)  Serial.printf(fmt, ## args) //!< output debug
 #else
-#define DEBUG_PRINT(fmt, args...)  // don't output anything for non debug builds
+#define DEBUG_PRINT(fmt, args...)  //!< don't output anything for non debug builds
 #endif
+
+#define CALLBACK_FUNCTION_PERIOD 10 //!< period the callback function is called [ms]
+#define MS_PER_S 1000 //!< ms per second
 
 //==============================================================================
 // Constants
@@ -27,6 +30,8 @@ const int sdCardSck = 14;
 
 //! Mapping between button index and pin number on musigBoxli board
 const uint8_t buttonIxMap[] = { 6, 7, 8, 5, 4, 3, 2, 1, 0, 10, 15 };
+//! Array providing the press duration for each button
+uint16_t buttonPressDuration[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 //! Number of input buttons
 const int numButtons = sizeof(buttonIxMap) / sizeof(buttonIxMap[0]);
 //! Volume mapping lookup table, this maps the linear poti input to the actual volume
@@ -145,21 +150,30 @@ static uint32_t playCallBack(uint32_t *pVolume)
         // if digitalRead is 1, button is not pressed
         if (digitalRead(buttonPin))
         {
-            // button is not pressed, clear the corresponding bit in
-            // buttonPressed and buttonPressedReleased masks
+            // if buttonsPressed is set for this button we have pressed it before, meaning now we released it
+            if (buttonsPressed & buttonMask)
+            {
+                // count number of seconds the button was pressed
+                int numSeconds = buttonPressDuration[buttonIx]/(MS_PER_S/CALLBACK_FUNCTION_PERIOD);
+                DEBUG_PRINT("button %d pressed for %d sec\n", numButtons - 1 - buttonIx, numSeconds);
+
+                // we need to handle this button's press
+                buttonsToHandle |= buttonMask;
+            }
+
+            // clear flag in buttonsPressed
             buttonsPressed &= ~buttonMask;
-            buttonsPressedHandled &= ~buttonMask;
+            // reset button press duration counter
+            buttonPressDuration[buttonIx] = 0;
         }
+        // else button is pressed
         else
         {
             // remember this button pressed
             buttonsPressed |= buttonMask;
 
-            // if the current button is pressed and has not been handled yet
-            if (buttonsPressed & buttonMask & ~buttonsPressedHandled)
-            {
-                buttonsToHandle |= buttonMask;
-            }
+            // increase button press duration counter
+            buttonPressDuration[buttonIx]++;
         }
 
         // advance to next button
