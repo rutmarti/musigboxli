@@ -57,7 +57,7 @@ const int firstSongIx = 0;
     \param pVolume  Volume to be set by the pcmPlay library
 
     \return Function returns non zero if buttons have been pressed where the
-            any bits set to one corresponds to button index which was pressed
+            bits set to one corresponds to button index which was pressed
 */
 static uint32_t playCallBack(uint32_t *pVolume);
 
@@ -122,46 +122,49 @@ static uint32_t playCallBack(uint32_t *pVolume)
 {
     // persistent variable between function calls
     // bit mask with all buttons which are pressed at the moment set to 1
-    static uint32_t buttonPressed = 0;
+    static uint32_t buttonsPressed = 0;
     // bit mask with all buttons which are pressed at the moment and were
     // already reported set to 1
-    static uint32_t buttonPressedReleased = 0;
+    static uint32_t buttonsPressedHandled = 0;
 
     // return value of the function
-    uint32_t rv = 0;
+    uint32_t buttonsToHandle = 0;
     // loop variable used for looping over all input buttons
-    int numBut = numButtons;
+    int buttonIx = numButtons;
     // pointer to first index of button map, will be increased inside the loop
     const uint8_t *pButMap = buttonIxMap;
     // used bit mask for current buttonIx, this will be shifted by 1 after every
     // iteration
-    uint16_t bitMask = 1;
+    uint16_t buttonMask = 1;
 
     // loop over all buttons and check which buttons were pressed or released
-    while (numBut--)
+    while (buttonIx--)
     {
         int buttonPin = *pButMap;
+
         // if digitalRead is 1, button is not pressed
         if (digitalRead(buttonPin))
         {
             // button is not pressed, clear the corresponding bit in
             // buttonPressed and buttonPressedReleased masks
-            buttonPressed &= ~bitMask;
-            buttonPressedReleased &= ~bitMask;
+            buttonsPressed &= ~buttonMask;
+            buttonsPressedHandled &= ~buttonMask;
         }
         else
         {
-            if (buttonPressed & bitMask & ~buttonPressedReleased)
+            // remember this button pressed
+            buttonsPressed |= buttonMask;
+
+            // if the current button is pressed and has not been handled yet
+            if (buttonsPressed & buttonMask & ~buttonsPressedHandled)
             {
-                rv |= bitMask;
-            }
-            else
-            {
-                buttonPressed |= bitMask;
+                buttonsToHandle |= buttonMask;
             }
         }
+
+        // advance to next button
         pButMap++;
-        bitMask = bitMask << 1;
+        buttonMask <<= 1;
     }
 
     // read potentiometer voltage
@@ -177,8 +180,10 @@ static uint32_t playCallBack(uint32_t *pVolume)
     *pVolume = volNow;
 
     // remember for which buttons we reported the pressed state already
-    buttonPressedReleased |= rv;
-    return rv;
+    buttonsPressedHandled |= buttonsToHandle;
+
+    // return which buttons' presses we have to handle
+    return buttonsToHandle;
 }
 
 
