@@ -12,10 +12,13 @@
 //#define DEBUG_ENABLED //!< Enable debug output
 
 #ifdef DEBUG_ENABLED
-#define DEBUG_PRINT(fmt, args...)  Serial.printf(fmt, ## args)
+#define DEBUG_PRINT(fmt, args...)  Serial.printf(fmt, ## args) //!< output debug
 #else
-#define DEBUG_PRINT(fmt, args...)  // don't output anything for non debug builds
+#define DEBUG_PRINT(fmt, args...)  //!< don't output anything for non debug builds
 #endif
+
+#define CALLBACK_FUNCTION_PERIOD 10 //!< period the callback function is called [ms]
+#define MS_PER_S 1000 //!< ms per second
 
 //==============================================================================
 // Constants
@@ -29,6 +32,9 @@ const int sdCardSck = 14;
 const uint8_t buttonIxMap[] = { 6, 7, 8, 5, 4, 3, 2, 1, 0, 10, 15 };
 //! Number of input buttons
 const int numButtons = sizeof(buttonIxMap) / sizeof(buttonIxMap[0]);
+//! Array providing the press duration for each button
+uint16_t buttonPressDuration[numButtons] = { 0 };
+
 //! Volume mapping lookup table, this maps the linear poti input to the actual volume
 const uint16_t volTable[16] =
 { 1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 17, 21, 26, 32, 40, 50 };
@@ -57,7 +63,7 @@ const int firstSongIx = 0;
     \param pVolume  Volume to be set by the pcmPlay library
 
     \return Function returns non zero if buttons have been pressed where the
-            any bits set to one corresponds to button index which was pressed
+            bits set to one corresponds to button index which was pressed
 */
 static uint32_t playCallBack(uint32_t *pVolume);
 
@@ -122,46 +128,58 @@ static uint32_t playCallBack(uint32_t *pVolume)
 {
     // persistent variable between function calls
     // bit mask with all buttons which are pressed at the moment set to 1
-    static uint32_t buttonPressed = 0;
+    static uint32_t buttonsPressed = 0;
     // bit mask with all buttons which are pressed at the moment and were
     // already reported set to 1
-    static uint32_t buttonPressedReleased = 0;
+    static uint32_t buttonsPressedHandled = 0;
 
     // return value of the function
-    uint32_t rv = 0;
+    uint32_t buttonsToHandle = 0;
     // loop variable used for looping over all input buttons
-    int numBut = numButtons;
+    int buttonIx = numButtons;
     // pointer to first index of button map, will be increased inside the loop
     const uint8_t *pButMap = buttonIxMap;
     // used bit mask for current buttonIx, this will be shifted by 1 after every
     // iteration
-    uint16_t bitMask = 1;
+    uint16_t buttonMask = 1;
 
     // loop over all buttons and check which buttons were pressed or released
-    while (numBut--)
+    while (buttonIx--)
     {
         int buttonPin = *pButMap;
+
         // if digitalRead is 1, button is not pressed
         if (digitalRead(buttonPin))
         {
-            // button is not pressed, clear the corresponding bit in
-            // buttonPressed and buttonPressedReleased masks
-            buttonPressed &= ~bitMask;
-            buttonPressedReleased &= ~bitMask;
+            // if buttonsPressed is set for this button we have pressed it before, meaning now we released it
+            if (buttonsPressed & buttonMask)
+            {
+                // count number of seconds the button was pressed
+                int numSeconds = buttonPressDuration[buttonIx]/(MS_PER_S/CALLBACK_FUNCTION_PERIOD);
+                DEBUG_PRINT("button %d pressed for %d sec\n", numButtons - 1 - buttonIx, numSeconds);
+
+                // we need to handle this button's press
+                buttonsToHandle |= buttonMask;
+            }
+
+            // clear flag in buttonsPressed
+            buttonsPressed &= ~buttonMask;
+            // reset button press duration counter
+            buttonPressDuration[buttonIx] = 0;
         }
+        // else button is pressed
         else
         {
-            if (buttonPressed & bitMask & ~buttonPressedReleased)
-            {
-                rv |= bitMask;
-            }
-            else
-            {
-                buttonPressed |= bitMask;
-            }
+            // remember this button pressed
+            buttonsPressed |= buttonMask;
+
+            // increase button press duration counter
+            buttonPressDuration[buttonIx]++;
         }
+
+        // advance to next button
         pButMap++;
-        bitMask = bitMask << 1;
+        buttonMask <<= 1;
     }
 
     // read potentiometer voltage
@@ -177,8 +195,10 @@ static uint32_t playCallBack(uint32_t *pVolume)
     *pVolume = volNow;
 
     // remember for which buttons we reported the pressed state already
-    buttonPressedReleased |= rv;
-    return rv;
+    buttonsPressedHandled |= buttonsToHandle;
+
+    // return which buttons' presses we have to handle
+    return buttonsToHandle;
 }
 
 
@@ -207,8 +227,8 @@ void loop()
     // put your main code here, to run repeatedly:
 
     // index of current file to be played
-    static int idx = 0;
-    static int alb = 3;
+    static int idx = firstSongIx;
+    static int alb = firstAlbIx;
 
     uint32_t callBackVal;
     char fileName[10];
@@ -242,9 +262,11 @@ void loop()
             switch (buttonIx)
             {
             case backButtonIx:
+                // go to previous song
                 idx = (idx > 0) ? idx - 1 : 0;
                 break;
             case fwdButtonIx:
+                // go to next song
                 idx += 1;
                 break;
             default:
