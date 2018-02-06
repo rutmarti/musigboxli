@@ -30,10 +30,11 @@ const int sdCardSck = 14;
 
 //! Mapping between button index and pin number on musigBoxli board
 const uint8_t buttonIxMap[] = { 6, 7, 8, 5, 4, 3, 2, 1, 0, 10, 15 };
-//! Array providing the press duration for each button
-uint16_t buttonPressDuration[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 //! Number of input buttons
 const int numButtons = sizeof(buttonIxMap) / sizeof(buttonIxMap[0]);
+//! Array providing the press duration for each button
+uint16_t buttonPressDuration[numButtons] = { 0 };
+
 //! Volume mapping lookup table, this maps the linear poti input to the actual volume
 const uint16_t volTable[16] =
 { 1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 17, 21, 26, 32, 40, 50 };
